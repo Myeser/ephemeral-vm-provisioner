@@ -105,6 +105,25 @@ evp reap      # normally run by the scheduled workflow, not by hand
 evp terminate i-xxxxxxxxxxxxxxxxx
 ```
 
+## Security model
+
+- **Pull requests can't reach AWS.** `provision.yml` and `reaper.yml`
+  only trigger on `workflow_dispatch` / `schedule`, never `pull_request`
+  — GitHub does not fire those from a PR, and `workflow_dispatch` also
+  requires the invoker to already have write access to the repo. The
+  only workflow that runs on `pull_request` (including from forks) is
+  `ci.yml`, which never requests `id-token`/AWS credentials and tests
+  entirely against `moto`'s mocked EC2.
+- **The OIDC trust policy is scoped to `main`.** `infra/iam-trust-policy.json`'s
+  `sub` condition is `repo:<org>/<repo>:ref:refs/heads/main`, so even a
+  manual `workflow_dispatch` run against a branch with an edited,
+  unmerged workflow file cannot assume the AWS role — only runs against
+  the reviewed `main` branch can.
+- **Never add `pull_request_target`** to any workflow in this repo. It
+  runs with the base repo's secrets even for fork PRs, which is the
+  classic way this kind of pipeline gets abused. Both AWS-touching
+  workflows have an inline comment warning against it.
+
 ## Safety limits
 
 - Only `t2.micro` / `t3.micro` can be launched (`config.ALLOWED_INSTANCE_TYPES`)

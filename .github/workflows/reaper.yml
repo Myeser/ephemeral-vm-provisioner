@@ -5,6 +5,10 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
+# schedule always runs the workflow file from the default branch, and
+# manual dispatch is scoped to main by the IAM trust policy (see
+# infra/iam-trust-policy.json). Do not add pull_request/pull_request_target
+# triggers to this file.
 permissions:
   id-token: write
   contents: read

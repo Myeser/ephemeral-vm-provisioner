@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# This workflow runs on pull_request, including from forks, so it must
+# NEVER request id-token/AWS credentials or become pull_request_target.
+# Tests run entirely against moto's mocked EC2 (see tests/) - no real
+# AWS access is needed or granted here.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

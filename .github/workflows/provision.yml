@@ -24,6 +24,11 @@ on:
 
 # id-token: write is what lets this job assume the AWS role via OIDC
 # instead of needing a long-lived access key stored as a secret.
+# This workflow only runs on workflow_dispatch (never pull_request), and
+# the IAM trust policy (infra/iam-trust-policy.json) additionally scopes
+# the role to ref:refs/heads/main, so a run dispatched against any other
+# branch cannot assume it. Do not add pull_request/pull_request_target
+# triggers to this file.
 permissions:
   id-token: write
   contents: read

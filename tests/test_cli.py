@@ -7,7 +7,7 @@ from moto import mock_aws
 
 from evp.cli import cli
 
-REGION = "us-east-1"
+REGION = "eu-west-2"
 
 
 def _default_ami(ec2_client) -> str:

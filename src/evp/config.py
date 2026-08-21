@@ -11,4 +11,4 @@ ALLOWED_INSTANCE_TYPES = {"t2.micro", "t3.micro"}
 MAX_TTL_MINUTES = 240
 DEFAULT_TTL_MINUTES = 60
 MANAGED_BY_TAG_VALUE = "ephemeral-vm-provisioner"
-DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-1")
+DEFAULT_REGION = os.environ.get("AWS_REGION", "eu-west-2")
