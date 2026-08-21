@@ -1,0 +1,95 @@
+name: Provision VM (Terraform)
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_type:
+        description: "EC2 instance type"
+        required: true
+        default: "t3.micro"
+        type: choice
+        options:
+          - t2.micro
+          - t3.micro
+      ttl_minutes:
+        description: "Minutes until auto-teardown (max 240)"
+        required: true
+        default: "60"
+      ami_id:
+        description: "AMI ID to launch"
+        required: true
+
+# Alternative to provision.yml's boto3 path - same instance, same tags,
+# same IAM role. State is local-only and discarded when the job ends
+# (see infra/terraform/versions.tf for why that's deliberate): teardown
+# is always handled by the tag-based reaper, never by `terraform
+# destroy`, so no persisted state is needed here.
+#
+# This workflow only runs on workflow_dispatch (never pull_request), and
+# the IAM trust policy scopes the role to ref:refs/heads/main. Do not add
+# pull_request/pull_request_target triggers to this file.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.15"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: terraform init
+        run: terraform init
+
+      - name: terraform apply
+        run: |
+          terraform apply -auto-approve \
+            -var="ami_id=${{ inputs.ami_id }}" \
+            -var="instance_type=${{ inputs.instance_type }}" \
+            -var="ttl_minutes=${{ inputs.ttl_minutes }}" \
+            -var="owner=${{ github.actor }}" \
+            -var="region=${{ vars.AWS_REGION || 'eu-west-2' }}"
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "### Ephemeral VM provisioned (Terraform)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          terraform output -json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no instance created)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "No DISCORD_WEBHOOK_URL secret set, skipping notification."
+            exit 0
+          fi
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "${{ job.status }}" = "success" ]; then
+            ID=$(terraform output -raw instance_id 2>/dev/null || echo "unknown")
+            EXPIRES=$(terraform output -raw expires_at 2>/dev/null || echo "unknown")
+            MESSAGE="✅ **Provisioned (Terraform)** \`$ID\` (${{ inputs.instance_type }}) for ${{ github.actor }} — expires $EXPIRES"
+          else
+            MESSAGE="❌ **Terraform provision failed** for ${{ github.actor }} — see $RUN_URL"
+          fi
+
+          jq -n --arg content "$MESSAGE" '{content: $content}' \
+            | curl -sf -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"

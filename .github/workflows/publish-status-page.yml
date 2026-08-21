@@ -2,7 +2,7 @@ name: Publish Status Page
 
 on:
   workflow_run:
-    workflows: ["Provision VM", "Reap Expired VMs"]
+    workflows: ["Provision VM", "Provision VM (Terraform)", "Reap Expired VMs"]
     types: [completed]
   workflow_dispatch: {}
 

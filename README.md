@@ -6,10 +6,15 @@ No server runs between requests, so the whole thing costs $0 on the AWS
 free tier.
 
 ```
-you  --workflow_dispatch-->  provision.yml  --OIDC-->  AWS  --RunInstances-->  EC2 (tagged, TTL-bound)
-                                                                                     |
-cron (every 15 min)  ------>  reaper.yml  ----OIDC---->  AWS  --TerminateInstances--
+you  --workflow_dispatch-->  provision.yml            --OIDC-->  AWS  --RunInstances-->  EC2 (tagged, TTL-bound)
+                              (or provision-terraform.yml)                                     |
+cron (every 15 min)  ------>  reaper.yml  ----------------OIDC-->  AWS  --TerminateInstances--
 ```
+
+`provision.yml` (boto3) and `provision-terraform.yml` are two independent
+ways to create the *same kind* of tagged instance - pick either one. The
+reaper doesn't care which path created an instance; it reads EC2 tags
+directly, so both are torn down identically.
 
 ## Why it's built this way
 
@@ -40,12 +45,18 @@ src/evp/
   config.py       safety limits (allowed instance types, max TTL)
 tests/            pytest + moto, no real AWS calls
 .github/workflows/
-  ci.yml          lint (ruff) + type-check (mypy) + test on every push
-  provision.yml   workflow_dispatch -> evp create
-  reaper.yml      cron -> evp reap
+  ci.yml                  lint/type-check/test + terraform fmt/validate
+  provision.yml           workflow_dispatch -> evp create (boto3 path)
+  provision-terraform.yml workflow_dispatch -> terraform apply (IaC path)
+  reaper.yml              cron -> evp reap (tears down either path's instances)
+  publish-status-page.yml renders + deploys the GitHub Pages status page
 infra/
   iam-trust-policy.json        OIDC trust policy (GitHub -> AWS)
-  iam-permissions-policy.json  least-privilege EC2 permissions
+  iam-permissions-policy.json  least-privilege EC2/IAM/DynamoDB permissions
+  iam-instance-trust-policy.json  trust policy for the SSM instance role
+  terraform/                   IaC alternative to the boto3 create path
+scripts/
+  render_status_page.py  turns `evp list --json` into the status page HTML
 ```
 
 ## Setup
@@ -75,6 +86,15 @@ aws iam put-role-policy \
   --policy-name ephemeral-vm-provisioner-permissions \
   --policy-document file://infra/iam-permissions-policy.json
 ```
+
+**Note on `ec2:Describe*`:** the boto3 path only ever calls a couple of
+specific Describe actions, but Terraform's AWS provider (`infra/terraform/`)
+calls several more during plan/refresh (instance types, security groups,
+subnets, etc.). Rather than chase each one down individually, the
+`DescribeAndTag` statement grants the whole `ec2:Describe*` prefix -
+safe to broaden since every action in it is read-only with no mutating
+blast radius, unlike `RunInstances`/`TerminateInstances`, which stay
+narrowly scoped.
 
 **Note on the `sub` claim:** GitHub embeds immutable owner/repo IDs directly
 into the OIDC token's `sub` claim (`repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...`),
@@ -198,6 +218,26 @@ From GitHub: **Actions > Provision VM > Run workflow**, fill in
 `instance_type` / `ttl_minutes` / `ami_id`. The instance ID and expiry
 show up in the run's job summary.
 
+**Terraform path:** **Actions > Provision VM (Terraform) > Run workflow**
+with the same inputs - functionally identical result (same tags, same
+SSM profile, torn down by the same reaper), just created via
+`terraform apply` instead of a direct boto3 call. Locally:
+
+```bash
+cd infra/terraform
+terraform init
+terraform apply \
+  -var="ami_id=ami-xxxxxxxx" \
+  -var="instance_type=t3.micro" \
+  -var="ttl_minutes=30" \
+  -var="owner=me"
+```
+
+State is local and disposable (see `versions.tf`) - there's deliberately
+no `terraform destroy` step anywhere in this project. The reaper tears
+down whatever it finds tagged, regardless of which path created it, so
+letting the TTL expire is always how these get cleaned up.
+
 **Status page:** https://myeser.github.io/ephemeral-vm-provisioner/ lists
 every currently-active instance and the exact `aws ssm start-session`
 command to connect to it. It's a static page rendered by
@@ -260,4 +300,4 @@ AWS credentials and never touches a live account.
 ## Roadmap
 
 - [x] Discord notification on provision + reap
-- [ ] Terraform module as an alternative to the boto3 path
+- [x] Terraform module as an alternative to the boto3 path

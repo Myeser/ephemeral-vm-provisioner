@@ -5,8 +5,7 @@
       "Sid": "DescribeAndTag",
       "Effect": "Allow",
       "Action": [
-        "ec2:DescribeInstances",
-        "ec2:DescribeImages",
+        "ec2:Describe*",
         "ec2:CreateTags"
       ],
       "Resource": "*"

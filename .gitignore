@@ -11,4 +11,14 @@ dist/
 build/
 .env
 instance.json
+reaped.json
+_site/
 .DS_Store
+
+# Terraform - state is intentionally never committed (see versions.tf);
+# the lock file (.terraform.lock.hcl) is committed as normal.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
