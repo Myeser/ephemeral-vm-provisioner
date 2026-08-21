@@ -7,6 +7,8 @@ from moto import mock_aws
 
 from evp import aws_client, config
 
+from .aws_fixtures import create_mock_instance_profile
+
 REGION = "eu-west-2"
 
 
@@ -18,6 +20,7 @@ def _default_ami(ec2_client) -> str:
 @pytest.fixture
 def ec2_client():
     with mock_aws():
+        create_mock_instance_profile(REGION)
         yield boto3.client("ec2", region_name=REGION)
 
 

@@ -66,6 +66,9 @@ def create_instance(
                 ],
             }
         ],
+        # Lets you shell in with `evp connect` / `aws ssm start-session`
+        # instead of managing SSH keys or opening inbound ports.
+        "IamInstanceProfile": {"Name": config.SSM_INSTANCE_PROFILE_NAME},
     }
     if key_name:
         run_kwargs["KeyName"] = key_name

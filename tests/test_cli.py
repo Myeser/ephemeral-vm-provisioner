@@ -7,6 +7,8 @@ from moto import mock_aws
 
 from evp.cli import cli
 
+from .aws_fixtures import create_mock_instance_profile
+
 REGION = "eu-west-2"
 
 
@@ -17,6 +19,7 @@ def _default_ami(ec2_client) -> str:
 def test_create_and_list_round_trip():
     runner = CliRunner()
     with mock_aws():
+        create_mock_instance_profile(REGION)
         ec2_client = boto3.client("ec2", region_name=REGION)
         ami_id = _default_ami(ec2_client)
 
@@ -46,6 +49,7 @@ def test_create_and_list_round_trip():
 def test_create_rejects_bad_instance_type():
     runner = CliRunner()
     with mock_aws():
+        create_mock_instance_profile(REGION)
         ec2_client = boto3.client("ec2", region_name=REGION)
         ami_id = _default_ami(ec2_client)
 

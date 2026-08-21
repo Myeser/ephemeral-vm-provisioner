@@ -93,9 +93,44 @@ In **Settings > Secrets and variables > Actions**:
 - Secret `AWS_ROLE_ARN` — the ARN of the role from step 2
 - Variable `AWS_REGION` — defaults to `us-east-1` if unset
 
-### 4. Pick a free-tier AMI
+### 4. Create the SSM instance role/profile (lets you shell into a VM)
 
-Any current Amazon Linux 2023 AMI works, e.g. via SSM:
+Every instance launches with this profile attached (see
+`config.SSM_INSTANCE_PROFILE_NAME`), so you can connect via SSM Session
+Manager instead of managing SSH keys or opening inbound ports:
+
+```bash
+aws iam create-role \
+  --role-name ephemeral-vm-provisioner-instance-role \
+  --assume-role-policy-document file://infra/iam-instance-trust-policy.json
+
+aws iam attach-role-policy \
+  --role-name ephemeral-vm-provisioner-instance-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+aws iam create-instance-profile \
+  --instance-profile-name ephemeral-vm-provisioner-instance-profile
+
+aws iam add-role-to-instance-profile \
+  --instance-profile-name ephemeral-vm-provisioner-instance-profile \
+  --role-name ephemeral-vm-provisioner-instance-role
+```
+
+The deployer role's permissions policy (`infra/iam-permissions-policy.json`)
+already grants it `iam:PassRole` on this instance role, scoped to
+`iam:PassedToService = ec2.amazonaws.com` - it can't pass any other role.
+
+You'll also need the Session Manager plugin installed locally:
+
+```bash
+brew install --cask session-manager-plugin
+```
+
+### 5. Pick a free-tier AMI
+
+Any current Amazon Linux 2023 AMI works (it ships with the SSM agent
+preinstalled, so no extra setup is needed on the instance side), e.g. via
+SSM:
 
 ```bash
 aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
@@ -116,6 +151,7 @@ evp create --ami ami-xxxxxxxx --instance-type t3.micro --ttl-minutes 30 --owner 
 evp list
 evp reap      # normally run by the scheduled workflow, not by hand
 evp terminate i-xxxxxxxxxxxxxxxxx
+evp connect i-xxxxxxxxxxxxxxxxx    # SSM Session Manager shell, no SSH key needed
 ```
 
 ## Security model

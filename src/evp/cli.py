@@ -6,6 +6,7 @@ provision/reaper GitHub Actions workflows in CI.
 from __future__ import annotations
 
 import json
+import os
 
 import click
 
@@ -79,6 +80,20 @@ def terminate(instance_id, region) -> None:
     """Terminate a specific instance."""
     aws_client.terminate_instance(instance_id, region=region)
     click.echo(f"Terminated {instance_id}")
+
+
+@cli.command()
+@click.argument("instance_id")
+@click.option("--region", default=config.DEFAULT_REGION, show_default=True)
+def connect(instance_id, region) -> None:
+    """Open an SSM Session Manager shell into a managed instance.
+
+    Requires the AWS CLI's session-manager-plugin to be installed locally.
+    No SSH key or open inbound port is needed - the instance profile
+    attached at launch (see config.SSM_INSTANCE_PROFILE_NAME) is what
+    authorizes this.
+    """
+    os.execvp("aws", ["aws", "ssm", "start-session", "--target", instance_id, "--region", region])
 
 
 @cli.command()
