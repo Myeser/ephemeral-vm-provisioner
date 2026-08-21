@@ -74,6 +74,18 @@ aws iam put-role-policy \
   --policy-document file://infra/iam-permissions-policy.json
 ```
 
+**Note on the `sub` claim:** GitHub embeds immutable owner/repo IDs directly
+into the OIDC token's `sub` claim (`repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...`),
+not just the plain `OWNER/REPO` name — this stops a deleted-and-recreated or
+renamed repo from inheriting another repo's trust. AWS also requires the
+trust policy's condition to reference `sub` or `job_workflow_ref` explicitly
+(a plain `repository`/`ref` condition is rejected as too permissive for a
+public OIDC provider). If you fork or rename this repo, get the real value
+by temporarily adding a step to a workflow that prints the decoded token
+(see git history for `provision.yml` around the initial setup) and update
+`infra/iam-trust-policy.json` + `aws iam update-assume-role-policy`
+accordingly.
+
 ### 3. Configure the repo
 
 In **Settings > Secrets and variables > Actions**:

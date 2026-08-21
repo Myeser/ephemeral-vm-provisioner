@@ -10,7 +10,7 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:Myeser/ephemeral-vm-provisioner:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": "repo:Myeser@93088450/ephemeral-vm-provisioner@1341989083:ref:refs/heads/main"
         }
       }
     }
