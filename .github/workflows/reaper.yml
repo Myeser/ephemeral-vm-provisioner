@@ -33,4 +33,30 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Reap expired instances
-        run: evp reap --json
+        run: evp reap --json | tee reaped.json
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "No DISCORD_WEBHOOK_URL secret set, skipping notification."
+            exit 0
+          fi
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "${{ job.status }}" != "success" ]; then
+            MESSAGE="❌ **Reaper run failed** — see $RUN_URL"
+          elif [ "$(jq 'length' reaped.json)" = "0" ]; then
+            echo "Nothing reaped, skipping notification."
+            exit 0
+          else
+            MESSAGE=$(jq -r \
+              '["🪦 **Reaped**:"] + (map("`\(.instance_id)` (owner=\(.owner))")) | join("\n")' \
+              reaped.json)
+          fi
+
+          jq -n --arg content "$MESSAGE" '{content: $content}' \
+            | curl -sf -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"

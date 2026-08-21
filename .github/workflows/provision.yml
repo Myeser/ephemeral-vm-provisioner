@@ -59,8 +59,32 @@ jobs:
             --json | tee instance.json
 
       - name: Write job summary
+        if: always()
         run: |
           echo "### Ephemeral VM provisioned" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat instance.json >> "$GITHUB_STEP_SUMMARY"
+          cat instance.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no instance created)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "No DISCORD_WEBHOOK_URL secret set, skipping notification."
+            exit 0
+          fi
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "${{ job.status }}" = "success" ] && [ -f instance.json ]; then
+            MESSAGE=$(jq -r \
+              '"✅ **Provisioned** `\(.instance_id)` (\(.instance_type)) for \(.owner) — expires \(.expires_at)"' \
+              instance.json)
+          else
+            MESSAGE="❌ **Provision failed** for ${{ github.actor }} — see $RUN_URL"
+          fi
+
+          jq -n --arg content "$MESSAGE" '{content: $content}' \
+            | curl -sf -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"

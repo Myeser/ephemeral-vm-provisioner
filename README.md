@@ -126,7 +126,21 @@ You'll also need the Session Manager plugin installed locally:
 brew install --cask session-manager-plugin
 ```
 
-### 5. Pick a free-tier AMI
+### 5. (Optional) Discord notifications
+
+Both workflows post to Discord if a `DISCORD_WEBHOOK_URL` secret is set -
+otherwise they skip that step silently. In Discord: **Server Settings >
+Integrations > Webhooks > New Webhook**, copy its URL, then:
+
+```bash
+gh secret set DISCORD_WEBHOOK_URL --body "https://discord.com/api/webhooks/..."
+```
+
+`provision.yml` notifies on every run (success or failure). `reaper.yml`
+only notifies when something was actually reaped, or on failure - not on
+every empty 15-minute sweep.
+
+### 6. Pick a free-tier AMI
 
 Any current Amazon Linux 2023 AMI works (it ships with the SSM agent
 preinstalled, so no extra setup is needed on the instance side), e.g. via
@@ -195,7 +209,7 @@ AWS credentials and never touches a live account.
 
 ## Roadmap
 
-- [ ] Slack/Discord notification on provision + reap
+- [x] Discord notification on provision + reap
 - [ ] DynamoDB audit log of every provision/destroy event
 - [ ] Static status page (GitHub Pages) listing currently-active VMs
 - [ ] Terraform module as an alternative to the boto3 path
