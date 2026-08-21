@@ -132,7 +132,9 @@ brew install --cask session-manager-plugin
 
 Every `evp create` / `evp reap` writes an entry here (best-effort - a
 missing table or a transient DynamoDB error never blocks the actual
-provisioning or reaping):
+provisioning or reaping). Read it back with `evp history <instance-id>` -
+unlike EC2 itself, which stops returning a terminated instance after
+about an hour, this table keeps the record indefinitely:
 
 ```bash
 aws dynamodb create-table \
@@ -198,6 +200,7 @@ evp list
 evp reap      # normally run by the scheduled workflow, not by hand
 evp terminate i-xxxxxxxxxxxxxxxxx
 evp connect i-xxxxxxxxxxxxxxxxx    # SSM Session Manager shell, no SSH key needed
+evp history i-xxxxxxxxxxxxxxxxx    # full create/reap timeline from DynamoDB
 ```
 
 ## Security model

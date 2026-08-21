@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 import pytest
-from boto3.dynamodb.conditions import Key
 from moto import mock_aws
 
 from evp import aws_client, config
@@ -118,10 +117,11 @@ def test_create_and_reap_write_audit_log_entries(ec2_client):
 
     aws_client.reap_expired(region=REGION)
 
-    table = boto3.resource("dynamodb", region_name=REGION).Table(config.AUDIT_TABLE_NAME)
-    items = table.query(
-        KeyConditionExpression=Key("instance_id").eq(instance.instance_id)
-    )["Items"]
-    event_types = sorted(item["event_type"] for item in items)
+    events = aws_client.get_audit_history(instance.instance_id, region=REGION)
 
-    assert event_types == ["create", "reap"]
+    assert [e["event_type"] for e in events] == ["create", "reap"]
+    assert all(e["owner"] == "octocat" for e in events)
+
+
+def test_get_audit_history_empty_for_unknown_instance(ec2_client):
+    assert aws_client.get_audit_history("i-doesnotexist", region=REGION) == []

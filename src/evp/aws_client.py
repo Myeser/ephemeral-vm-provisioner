@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import boto3
+from boto3.dynamodb.conditions import Key
 
 from . import config
 from .models import ManagedInstance
@@ -191,3 +192,15 @@ def reap_expired(*, region: str = config.DEFAULT_REGION) -> list[ManagedInstance
                 expires_at=i.expires_at,
             )
     return expired
+
+
+def get_audit_history(instance_id: str, *, region: str = config.DEFAULT_REGION) -> list[dict]:
+    """Return every recorded event for one instance, oldest first.
+
+    Unlike _log_audit_event this is not best-effort - it's a direct,
+    explicit read the caller asked for, so a missing table or a
+    DynamoDB error should surface normally rather than being swallowed.
+    """
+    table = boto3.resource("dynamodb", region_name=region).Table(config.AUDIT_TABLE_NAME)
+    response = table.query(KeyConditionExpression=Key("instance_id").eq(instance_id))
+    return response["Items"]

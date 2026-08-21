@@ -9,6 +9,7 @@ import json
 import os
 
 import click
+from botocore.exceptions import ClientError
 
 from . import aws_client, config
 from .models import ManagedInstance
@@ -109,6 +110,30 @@ def reap(region, as_json) -> None:
     for i in reaped:
         overdue = abs(i.minutes_remaining) if i.minutes_remaining is not None else 0
         click.echo(f"Reaped {i.instance_id} (owner={i.owner}, expired {overdue:.1f}m ago)")
+
+
+@cli.command()
+@click.argument("instance_id")
+@click.option("--region", default=config.DEFAULT_REGION, show_default=True)
+@click.option("--json", "as_json", is_flag=True)
+def history(instance_id, region, as_json) -> None:
+    """Show the DynamoDB audit trail (create/reap events) for one instance."""
+    try:
+        events = aws_client.get_audit_history(instance_id, region=region)
+    except ClientError as exc:
+        raise click.ClickException(f"could not read audit log: {exc}") from exc
+
+    if as_json:
+        click.echo(json.dumps(events))
+        return
+    if not events:
+        click.echo(f"No audit history for {instance_id}.")
+        return
+    for event in events:
+        click.echo(
+            f"{event['event_time']}  {event['event_type']:8s}  "
+            f"owner={event['owner']}  type={event['instance_type']}"
+        )
 
 
 def _instance_to_dict(instance: ManagedInstance) -> dict:
