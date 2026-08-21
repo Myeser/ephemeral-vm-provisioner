@@ -59,8 +59,9 @@ aws iam create-open-id-connect-provider \
 
 ### 2. Create the IAM role
 
-Edit the placeholders in `infra/iam-trust-policy.json`
-(`<ACCOUNT_ID>`, `<GITHUB_ORG>/<GITHUB_REPO>`), then:
+The repo/org placeholder is already filled in. Replace `<ACCOUNT_ID>` in
+`infra/iam-trust-policy.json` with your AWS account ID
+(`aws sts get-caller-identity --query Account --output text`), then:
 
 ```bash
 aws iam create-role \
