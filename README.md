@@ -88,6 +88,14 @@ by temporarily adding a step to a workflow that prints the decoded token
 `infra/iam-trust-policy.json` + `aws iam update-assume-role-policy`
 accordingly.
 
+There's a second wrinkle: a job that declares `environment: name: ...`
+(as `publish-status-page.yml` does, for the GitHub Pages deployment) gets
+a *different* `sub` shape entirely -
+`repo:OWNER@ID/REPO@ID:environment:ENV_NAME` instead of the ref-based one.
+The trust policy's `sub` condition is a list covering both shapes rather
+than a single string - add another entry to that list for any new
+workflow that introduces its own `environment:` block.
+
 ### 3. Configure the repo
 
 In **Settings > Secrets and variables > Actions**:
