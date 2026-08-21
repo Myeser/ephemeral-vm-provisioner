@@ -32,7 +32,6 @@ def create_instance(
     ami_id: str,
     ttl_minutes: int,
     owner: str,
-    key_name: str | None = None,
     region: str = config.DEFAULT_REGION,
 ) -> ManagedInstance:
     if instance_type not in config.ALLOWED_INSTANCE_TYPES:
@@ -70,8 +69,6 @@ def create_instance(
         # instead of managing SSH keys or opening inbound ports.
         "IamInstanceProfile": {"Name": config.SSM_INSTANCE_PROFILE_NAME},
     }
-    if key_name:
-        run_kwargs["KeyName"] = key_name
 
     response = ec2.run_instances(**run_kwargs)
     instance = response["Instances"][0]

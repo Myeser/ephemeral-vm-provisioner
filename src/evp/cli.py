@@ -29,10 +29,9 @@ def cli() -> None:
     type=int,
 )
 @click.option("--owner", required=True, help="Who requested this VM (e.g. GitHub actor).")
-@click.option("--key-name", default=None, help="EC2 key pair name for SSH access.")
 @click.option("--region", default=config.DEFAULT_REGION, show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Print machine-readable output.")
-def create(instance_type, ami_id, ttl_minutes, owner, key_name, region, as_json) -> None:
+def create(instance_type, ami_id, ttl_minutes, owner, region, as_json) -> None:
     """Launch a new ephemeral instance."""
     try:
         instance = aws_client.create_instance(
@@ -40,7 +39,6 @@ def create(instance_type, ami_id, ttl_minutes, owner, key_name, region, as_json)
             ami_id=ami_id,
             ttl_minutes=ttl_minutes,
             owner=owner,
-            key_name=key_name,
             region=region,
         )
     except ValueError as exc:
