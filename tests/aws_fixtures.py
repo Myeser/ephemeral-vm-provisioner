@@ -36,3 +36,25 @@ def create_mock_instance_profile(region: str) -> None:
         InstanceProfileName=config.SSM_INSTANCE_PROFILE_NAME,
         RoleName="test-instance-role",
     )
+
+
+def create_mock_audit_table(region: str) -> None:
+    """Create the audit log table in moto's mocked DynamoDB.
+
+    Without this, `_log_audit_event` silently swallows a
+    ResourceNotFoundException (by design - see aws_client.py), so tests
+    that want to assert on audit entries need the table to actually exist.
+    """
+    dynamodb = boto3.client("dynamodb", region_name=region)
+    dynamodb.create_table(
+        TableName=config.AUDIT_TABLE_NAME,
+        AttributeDefinitions=[
+            {"AttributeName": "instance_id", "AttributeType": "S"},
+            {"AttributeName": "event_time", "AttributeType": "S"},
+        ],
+        KeySchema=[
+            {"AttributeName": "instance_id", "KeyType": "HASH"},
+            {"AttributeName": "event_time", "KeyType": "RANGE"},
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )

@@ -20,9 +20,11 @@ cron (every 15 min)  ------>  reaper.yml  ----OIDC---->  AWS  --TerminateInstanc
 - **No long-lived AWS credentials.** The workflows assume an IAM role via
   OIDC federation (`aws-actions/configure-aws-credentials`), so there are
   no static access keys sitting in GitHub secrets to leak or rotate.
-- **EC2 tags as the database.** `Owner`, `ExpiresAt`, and `ManagedBy` tags
-  are the single source of truth for what this tool owns. No RDS/DynamoDB
-  to provision, patch, or pay for.
+- **EC2 tags as the source of truth for lifecycle state.** `Owner`,
+  `ExpiresAt`, and `ManagedBy` tags are what `list`/`reap` actually key
+  off of - no RDS to provision or patch. A DynamoDB table exists
+  alongside this, but only as a best-effort audit log; it's never read
+  from, so it can't affect what gets reaped.
 - **The reaper is the safety net.** TTL enforcement doesn't rely on the
   requester behaving — `reaper.yml` terminates anything past its
   `ExpiresAt` tag every 15 minutes, and `evp create` refuses TTLs beyond
@@ -126,7 +128,37 @@ You'll also need the Session Manager plugin installed locally:
 brew install --cask session-manager-plugin
 ```
 
-### 5. (Optional) Discord notifications
+### 5. Create the DynamoDB audit log table
+
+Every `evp create` / `evp reap` writes an entry here (best-effort - a
+missing table or a transient DynamoDB error never blocks the actual
+provisioning or reaping):
+
+```bash
+aws dynamodb create-table \
+  --table-name ephemeral-vm-provisioner-audit-log \
+  --attribute-definitions \
+      AttributeName=instance_id,AttributeType=S \
+      AttributeName=event_time,AttributeType=S \
+  --key-schema \
+      AttributeName=instance_id,KeyType=HASH \
+      AttributeName=event_time,KeyType=RANGE \
+  --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1
+```
+
+Provisioned (not on-demand) capacity is used deliberately: DynamoDB's
+always-free 25 RCU/WCU allowance only covers provisioned-mode tables, and
+1/1 is far more than this project's write volume needs. Query an
+instance's full history with:
+
+```bash
+aws dynamodb query \
+  --table-name ephemeral-vm-provisioner-audit-log \
+  --key-condition-expression "instance_id = :id" \
+  --expression-attribute-values '{":id": {"S": "i-xxxxxxxxxxxxxxxxx"}}'
+```
+
+### 6. (Optional) Discord notifications
 
 Both workflows post to Discord if a `DISCORD_WEBHOOK_URL` secret is set -
 otherwise they skip that step silently. In Discord: **Server Settings >
@@ -140,7 +172,7 @@ gh secret set DISCORD_WEBHOOK_URL --body "https://discord.com/api/webhooks/..."
 only notifies when something was actually reaped, or on failure - not on
 every empty 15-minute sweep.
 
-### 6. Pick a free-tier AMI
+### 7. Pick a free-tier AMI
 
 Any current Amazon Linux 2023 AMI works (it ships with the SSM agent
 preinstalled, so no extra setup is needed on the instance side), e.g. via
@@ -210,6 +242,5 @@ AWS credentials and never touches a live account.
 ## Roadmap
 
 - [x] Discord notification on provision + reap
-- [ ] DynamoDB audit log of every provision/destroy event
 - [ ] Static status page (GitHub Pages) listing currently-active VMs
 - [ ] Terraform module as an alternative to the boto3 path

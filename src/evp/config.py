@@ -17,3 +17,9 @@ DEFAULT_REGION = os.environ.get("AWS_REGION", "eu-west-2")
 # Manager instead of managing SSH keys / open inbound ports. See
 # infra/iam-instance-trust-policy.json for the role it wraps.
 SSM_INSTANCE_PROFILE_NAME = "ephemeral-vm-provisioner-instance-profile"
+
+# DynamoDB table recording every create/reap event. Writes are
+# best-effort (see aws_client._log_audit_event) - a table that doesn't
+# exist yet, or a transient DynamoDB error, must never block create or
+# reap themselves.
+AUDIT_TABLE_NAME = "ephemeral-vm-provisioner-audit-log"

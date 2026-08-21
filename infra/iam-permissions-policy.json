@@ -51,6 +51,12 @@
           "iam:PassedToService": "ec2.amazonaws.com"
         }
       }
+    },
+    {
+      "Sid": "WriteAuditLog",
+      "Effect": "Allow",
+      "Action": "dynamodb:PutItem",
+      "Resource": "arn:aws:dynamodb:*:876777730143:table/ephemeral-vm-provisioner-audit-log"
     }
   ]
 }

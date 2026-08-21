@@ -3,11 +3,12 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 import pytest
+from boto3.dynamodb.conditions import Key
 from moto import mock_aws
 
 from evp import aws_client, config
 
-from .aws_fixtures import create_mock_instance_profile
+from .aws_fixtures import create_mock_audit_table, create_mock_instance_profile
 
 REGION = "eu-west-2"
 
@@ -21,6 +22,7 @@ def _default_ami(ec2_client) -> str:
 def ec2_client():
     with mock_aws():
         create_mock_instance_profile(REGION)
+        create_mock_audit_table(REGION)
         yield boto3.client("ec2", region_name=REGION)
 
 
@@ -102,3 +104,24 @@ def test_reap_expired_terminates_only_expired_instances(ec2_client):
     }
     assert remaining[stale.instance_id] == "terminated"
     assert remaining[fresh.instance_id] in {"pending", "running"}
+
+
+def test_create_and_reap_write_audit_log_entries(ec2_client):
+    ami_id = _default_ami(ec2_client)
+    instance = aws_client.create_instance(
+        instance_type="t3.micro", ami_id=ami_id, ttl_minutes=60, owner="octocat", region=REGION
+    )
+    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    ec2_client.create_tags(
+        Resources=[instance.instance_id], Tags=[{"Key": "ExpiresAt", "Value": past}]
+    )
+
+    aws_client.reap_expired(region=REGION)
+
+    table = boto3.resource("dynamodb", region_name=REGION).Table(config.AUDIT_TABLE_NAME)
+    items = table.query(
+        KeyConditionExpression=Key("instance_id").eq(instance.instance_id)
+    )["Items"]
+    event_types = sorted(item["event_type"] for item in items)
+
+    assert event_types == ["create", "reap"]

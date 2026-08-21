@@ -7,6 +7,7 @@ grows a second backend (e.g. GCP) later.
 """
 from __future__ import annotations
 
+import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -24,6 +25,39 @@ TAG_NAME = "Name"
 
 def _client(region: str = config.DEFAULT_REGION):
     return boto3.client("ec2", region_name=region)
+
+
+def _log_audit_event(
+    event_type: str,
+    *,
+    instance_id: str,
+    owner: str,
+    instance_type: str,
+    region: str,
+    expires_at: datetime | None = None,
+) -> None:
+    """Best-effort write to the DynamoDB audit log.
+
+    Never raises: a table that hasn't been created yet, or a transient
+    DynamoDB error, must not stop create/reap from doing their actual
+    job (launching or terminating a real, billable EC2 instance).
+    """
+    item = {
+        "instance_id": instance_id,
+        "event_time": datetime.now(timezone.utc).isoformat(),
+        "event_type": event_type,
+        "owner": owner,
+        "instance_type": instance_type,
+        "region": region,
+    }
+    if expires_at is not None:
+        item["expires_at"] = expires_at.isoformat()
+
+    try:
+        table = boto3.resource("dynamodb", region_name=region).Table(config.AUDIT_TABLE_NAME)
+        table.put_item(Item=item)
+    except Exception as exc:  # noqa: BLE001 - audit logging must never block create/reap
+        print(f"warning: failed to write audit log entry for {instance_id}: {exc}", file=sys.stderr)
 
 
 def create_instance(
@@ -72,6 +106,15 @@ def create_instance(
 
     response = ec2.run_instances(**run_kwargs)
     instance = response["Instances"][0]
+
+    _log_audit_event(
+        "create",
+        instance_id=instance["InstanceId"],
+        owner=owner,
+        instance_type=instance_type,
+        region=region,
+        expires_at=expires_at,
+    )
 
     return ManagedInstance(
         instance_id=instance["InstanceId"],
@@ -138,4 +181,13 @@ def reap_expired(*, region: str = config.DEFAULT_REGION) -> list[ManagedInstance
     if expired:
         ec2 = _client(region)
         ec2.terminate_instances(InstanceIds=[i.instance_id for i in expired])
+        for i in expired:
+            _log_audit_event(
+                "reap",
+                instance_id=i.instance_id,
+                owner=i.owner,
+                instance_type=i.instance_type,
+                region=region,
+                expires_at=i.expires_at,
+            )
     return expired
