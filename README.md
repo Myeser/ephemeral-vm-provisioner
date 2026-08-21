@@ -1,0 +1,133 @@
+# Ephemeral VM Provisioner
+
+Self-service, TTL-bound EC2 instances requested through a GitHub Actions
+`workflow_dispatch` and automatically torn down by a scheduled reaper.
+No server runs between requests, so the whole thing costs $0 on the AWS
+free tier.
+
+```
+you  --workflow_dispatch-->  provision.yml  --OIDC-->  AWS  --RunInstances-->  EC2 (tagged, TTL-bound)
+                                                                                     |
+cron (every 15 min)  ------>  reaper.yml  ----OIDC---->  AWS  --TerminateInstances--
+```
+
+## Why it's built this way
+
+- **GitHub Actions as the control plane.** A hosted API needs a server
+  running around the clock just in case someone requests a VM. A
+  `workflow_dispatch` job does the same job on demand, for free, and
+  doubles as an audit log — every provision/reap is a logged run.
+- **No long-lived AWS credentials.** The workflows assume an IAM role via
+  OIDC federation (`aws-actions/configure-aws-credentials`), so there are
+  no static access keys sitting in GitHub secrets to leak or rotate.
+- **EC2 tags as the database.** `Owner`, `ExpiresAt`, and `ManagedBy` tags
+  are the single source of truth for what this tool owns. No RDS/DynamoDB
+  to provision, patch, or pay for.
+- **The reaper is the safety net.** TTL enforcement doesn't rely on the
+  requester behaving — `reaper.yml` terminates anything past its
+  `ExpiresAt` tag every 15 minutes, and `evp create` refuses TTLs beyond
+  `MAX_TTL_MINUTES` up front (see `src/evp/config.py`).
+
+## Project layout
+
+```
+src/evp/
+  cli.py          click CLI: create / list / terminate / reap
+  aws_client.py   all boto3 EC2 calls, tagging scheme
+  models.py       ManagedInstance dataclass (TTL/expiry logic)
+  config.py       safety limits (allowed instance types, max TTL)
+tests/            pytest + moto, no real AWS calls
+.github/workflows/
+  ci.yml          lint (ruff) + type-check (mypy) + test on every push
+  provision.yml   workflow_dispatch -> evp create
+  reaper.yml      cron -> evp reap
+infra/
+  iam-trust-policy.json        OIDC trust policy (GitHub -> AWS)
+  iam-permissions-policy.json  least-privilege EC2 permissions
+```
+
+## Setup
+
+### 1. Create the GitHub OIDC identity provider in AWS (one-time per account)
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+```
+
+### 2. Create the IAM role
+
+Edit the placeholders in `infra/iam-trust-policy.json`
+(`<ACCOUNT_ID>`, `<GITHUB_ORG>/<GITHUB_REPO>`), then:
+
+```bash
+aws iam create-role \
+  --role-name ephemeral-vm-provisioner \
+  --assume-role-policy-document file://infra/iam-trust-policy.json
+
+aws iam put-role-policy \
+  --role-name ephemeral-vm-provisioner \
+  --policy-name ephemeral-vm-provisioner-permissions \
+  --policy-document file://infra/iam-permissions-policy.json
+```
+
+### 3. Configure the repo
+
+In **Settings > Secrets and variables > Actions**:
+
+- Secret `AWS_ROLE_ARN` — the ARN of the role from step 2
+- Variable `AWS_REGION` — defaults to `us-east-1` if unset
+
+### 4. Pick a free-tier AMI
+
+Any current Amazon Linux 2023 AMI works, e.g. via SSM:
+
+```bash
+aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+```
+
+## Usage
+
+From GitHub: **Actions > Provision VM > Run workflow**, fill in
+`instance_type` / `ttl_minutes` / `ami_id`. The instance ID and expiry
+show up in the run's job summary.
+
+Locally (with AWS credentials configured):
+
+```bash
+pip install -e ".[dev]"
+
+evp create --ami ami-xxxxxxxx --instance-type t3.micro --ttl-minutes 30 --owner me
+evp list
+evp reap      # normally run by the scheduled workflow, not by hand
+evp terminate i-xxxxxxxxxxxxxxxxx
+```
+
+## Safety limits
+
+- Only `t2.micro` / `t3.micro` can be launched (`config.ALLOWED_INSTANCE_TYPES`)
+- TTL is capped at `config.MAX_TTL_MINUTES` (default 240)
+- The reaper can only terminate instances tagged
+  `ManagedBy=ephemeral-vm-provisioner` — it will never touch anything
+  else in the account (enforced by both the code and the IAM policy)
+
+## Testing
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+mypy src
+pytest -v
+```
+
+All AWS calls are mocked with `moto`, so the test suite needs no real
+AWS credentials and never touches a live account.
+
+## Roadmap
+
+- [ ] Slack/Discord notification on provision + reap
+- [ ] DynamoDB audit log of every provision/destroy event
+- [ ] Static status page (GitHub Pages) listing currently-active VMs
+- [ ] Terraform module as an alternative to the boto3 path

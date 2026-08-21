@@ -1,0 +1,69 @@
+name: Provision VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_type:
+        description: "EC2 instance type"
+        required: true
+        default: "t3.micro"
+        type: choice
+        options:
+          - t2.micro
+          - t3.micro
+      ttl_minutes:
+        description: "Minutes until auto-teardown (max 240)"
+        required: true
+        default: "60"
+      ami_id:
+        description: "AMI ID to launch"
+        required: true
+      key_name:
+        description: "EC2 key pair name for SSH (optional)"
+        required: false
+
+# id-token: write is what lets this job assume the AWS role via OIDC
+# instead of needing a long-lived access key stored as a secret.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Create instance
+        run: |
+          KEY_FLAG=""
+          if [ -n "${{ inputs.key_name }}" ]; then
+            KEY_FLAG="--key-name ${{ inputs.key_name }}"
+          fi
+          evp create \
+            --instance-type "${{ inputs.instance_type }}" \
+            --ttl-minutes "${{ inputs.ttl_minutes }}" \
+            --ami "${{ inputs.ami_id }}" \
+            --owner "${{ github.actor }}" \
+            $KEY_FLAG \
+            --json | tee instance.json
+
+      - name: Write job summary
+        run: |
+          echo "### Ephemeral VM provisioned" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat instance.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
