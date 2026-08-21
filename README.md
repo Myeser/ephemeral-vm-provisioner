@@ -296,8 +296,3 @@ pytest -v
 
 All AWS calls are mocked with `moto`, so the test suite needs no real
 AWS credentials and never touches a live account.
-
-## Roadmap
-
-- [x] Discord notification on provision + reap
-- [x] Terraform module as an alternative to the boto3 path
