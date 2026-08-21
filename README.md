@@ -190,6 +190,13 @@ From GitHub: **Actions > Provision VM > Run workflow**, fill in
 `instance_type` / `ttl_minutes` / `ami_id`. The instance ID and expiry
 show up in the run's job summary.
 
+**Status page:** https://myeser.github.io/ephemeral-vm-provisioner/ lists
+every currently-active instance and the exact `aws ssm start-session`
+command to connect to it. It's a static page rendered by
+`publish-status-page.yml` after every provision/reap run (via
+`scripts/render_status_page.py`) - there's no server behind it, so it's
+free and can't drift from what `evp list` actually reports at render time.
+
 Locally (with AWS credentials configured):
 
 ```bash
@@ -245,5 +252,4 @@ AWS credentials and never touches a live account.
 ## Roadmap
 
 - [x] Discord notification on provision + reap
-- [ ] Static status page (GitHub Pages) listing currently-active VMs
 - [ ] Terraform module as an alternative to the boto3 path

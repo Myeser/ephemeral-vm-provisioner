@@ -1,0 +1,57 @@
+name: Publish Status Page
+
+on:
+  workflow_run:
+    workflows: ["Provision VM", "Reap Expired VMs"]
+    types: [completed]
+  workflow_dispatch: {}
+
+# id-token: write covers two unrelated OIDC exchanges in this one job:
+# assuming the AWS role (evp list) and the GitHub Pages deployment token.
+# This workflow only runs on workflow_run/workflow_dispatch (never
+# pull_request), and the IAM trust policy scopes the AWS role to
+# ref:refs/heads/main. Do not add pull_request/pull_request_target
+# triggers to this file.
+permissions:
+  id-token: write
+  contents: read
+  pages: write
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Render status page
+        run: |
+          mkdir -p _site
+          evp list --json | python3 scripts/render_status_page.py "${{ vars.AWS_REGION || 'eu-west-2' }}" > _site/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
