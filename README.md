@@ -16,6 +16,19 @@ ways to create the *same kind* of tagged instance - pick either one. The
 reaper doesn't care which path created an instance; it reads EC2 tags
 directly, so both are torn down identically.
 
+**Honest note on the Terraform path:** it's included to demonstrate IaC
+fluency alongside the SDK path, not because this project's infrastructure
+actually needed it. A single `aws_instance` with no security groups, load
+balancers, or networking to wire together doesn't exercise what Terraform
+is actually good at (dependency-graph resolution across many resource
+types, long-term drift reconciliation against persisted state) - both of
+which this project deliberately doesn't use anyway (see "no backend"
+below). `evp` (boto3) remains the backbone: `list`/`reap`/`connect`/`history`
+all depend on it, and none of them are things Terraform is well-suited to
+express. Treat `infra/terraform/` as a place to try Terraform out on a
+real (if simple) resource, not as evidence it was the better tool for
+this particular job.
+
 ## Why it's built this way
 
 - **GitHub Actions as the control plane.** A hosted API needs a server
@@ -218,10 +231,12 @@ From GitHub: **Actions > Provision VM > Run workflow**, fill in
 `instance_type` / `ttl_minutes` / `ami_id`. The instance ID and expiry
 show up in the run's job summary.
 
-**Terraform path:** **Actions > Provision VM (Terraform) > Run workflow**
-with the same inputs - functionally identical result (same tags, same
-SSM profile, torn down by the same reaper), just created via
-`terraform apply` instead of a direct boto3 call. Locally:
+**Terraform path** (see the honest note under "Why it's built this way" -
+this exists to try Terraform, not because it's the better tool here):
+**Actions > Provision VM (Terraform) > Run workflow** with the same
+inputs - functionally identical result (same tags, same SSM profile,
+torn down by the same reaper), just created via `terraform apply`
+instead of a direct boto3 call. Locally:
 
 ```bash
 cd infra/terraform
