@@ -58,7 +58,7 @@ src/evp/
   config.py       safety limits (allowed instance types, max TTL)
 tests/            pytest + moto, no real AWS calls
 .github/workflows/
-  ci.yml                  lint/type-check/test + terraform fmt/validate
+  ci.yml                  lint/type-check/test + terraform fmt/validate + docker build
   provision.yml           workflow_dispatch -> evp create (boto3 path)
   provision-terraform.yml workflow_dispatch -> terraform apply (IaC path)
   reaper.yml              cron -> evp reap (tears down either path's instances)
@@ -70,6 +70,7 @@ infra/
   terraform/                   IaC alternative to the boto3 create path
 scripts/
   render_status_page.py  turns `evp list --json` into the status page HTML
+Dockerfile          containerized evp CLI - see "Usage" below
 ```
 
 ## Setup
@@ -271,6 +272,19 @@ evp reap      # normally run by the scheduled workflow, not by hand
 evp terminate i-xxxxxxxxxxxxxxxxx
 evp connect i-xxxxxxxxxxxxxxxxx    # SSM Session Manager shell, no SSH key needed
 evp history i-xxxxxxxxxxxxxxxxx    # full create/reap timeline from DynamoDB
+```
+
+Or via Docker, if you'd rather not deal with local Python versions at all
+(this repo's own dev machine only had Python 3.9, which is exactly the
+kind of mismatch this sidesteps):
+
+```bash
+docker build -t evp .
+
+# credentials come from your normal AWS env vars / ~/.aws - mount or
+# forward them same as any other AWS CLI tool:
+docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+  evp list --region eu-west-2
 ```
 
 ## Security model
