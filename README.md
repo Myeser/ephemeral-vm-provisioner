@@ -6,9 +6,9 @@ No server runs between requests, so the whole thing costs $0 on the AWS
 free tier.
 
 ```
-you  --workflow_dispatch-->  provision.yml            --OIDC-->  AWS  --RunInstances-->  EC2 (tagged, TTL-bound)
+you  --workflow_dispatch-->  provision.yml --OIDC-->  AWS  --RunInstances-->  EC2 (tagged, TTL-bound)
                               (or provision-terraform.yml)                                     |
-cron (every 15 min)  ------>  reaper.yml  ----------------OIDC-->  AWS  --TerminateInstances--
+cron (every 15 min)  ------>  reaper.yml  ----------------OIDC-------->  AWS  -------TerminateInstances-----
 ```
 
 `provision.yml` (boto3) and `provision-terraform.yml` are two independent
