@@ -34,7 +34,7 @@ this particular job.
 - **GitHub Actions as the control plane.** A hosted API needs a server
   running around the clock just in case someone requests a VM. A
   `workflow_dispatch` job does the same job on demand, for free, and
-  doubles as an audit log — every provision/reap is a logged run.
+  doubles as an audit log - every provision/reap is a logged run.
 - **No long-lived AWS credentials.** The workflows assume an IAM role via
   OIDC federation (`aws-actions/configure-aws-credentials`), so there are
   no static access keys sitting in GitHub secrets to leak or rotate.
@@ -44,7 +44,7 @@ this particular job.
   alongside this, but only as a best-effort audit log; it's never read
   from, so it can't affect what gets reaped.
 - **The reaper is the safety net.** TTL enforcement doesn't rely on the
-  requester behaving — `reaper.yml` terminates anything past its
+  requester behaving - `reaper.yml` terminates anything past its
   `ExpiresAt` tag every 15 minutes, and `evp create` refuses TTLs beyond
   `MAX_TTL_MINUTES` up front (see `src/evp/config.py`).
 
@@ -112,7 +112,7 @@ narrowly scoped.
 
 **Note on the `sub` claim:** GitHub embeds immutable owner/repo IDs directly
 into the OIDC token's `sub` claim (`repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...`),
-not just the plain `OWNER/REPO` name — this stops a deleted-and-recreated or
+not just the plain `OWNER/REPO` name - this stops a deleted-and-recreated or
 renamed repo from inheriting another repo's trust. AWS also requires the
 trust policy's condition to reference `sub` or `job_workflow_ref` explicitly
 (a plain `repository`/`ref` condition is rejected as too permissive for a
@@ -134,8 +134,8 @@ workflow that introduces its own `environment:` block.
 
 In **Settings > Secrets and variables > Actions**:
 
-- Secret `AWS_ROLE_ARN` — the ARN of the role from step 2
-- Variable `AWS_REGION` — defaults to `us-east-1` if unset
+- Secret `AWS_ROLE_ARN` - the ARN of the role from step 2
+- Variable `AWS_REGION` - defaults to `us-east-1` if unset
 
 ### 4. Create the SSM instance role/profile (lets you shell into a VM)
 
@@ -291,7 +291,7 @@ docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOK
 
 - **Pull requests can't reach AWS.** `provision.yml` and `reaper.yml`
   only trigger on `workflow_dispatch` / `schedule`, never `pull_request`
-  — GitHub does not fire those from a PR, and `workflow_dispatch` also
+  - GitHub does not fire those from a PR, and `workflow_dispatch` also
   requires the invoker to already have write access to the repo. The
   only workflow that runs on `pull_request` (including from forks) is
   `ci.yml`, which never requests `id-token`/AWS credentials and tests
@@ -299,7 +299,7 @@ docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOK
 - **The OIDC trust policy is scoped to `main`.** `infra/iam-trust-policy.json`'s
   `sub` condition is `repo:<org>/<repo>:ref:refs/heads/main`, so even a
   manual `workflow_dispatch` run against a branch with an edited,
-  unmerged workflow file cannot assume the AWS role — only runs against
+  unmerged workflow file cannot assume the AWS role - only runs against
   the reviewed `main` branch can.
 - **Never add `pull_request_target`** to any workflow in this repo. It
   runs with the base repo's secrets even for fork PRs, which is the
@@ -311,7 +311,7 @@ docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOK
 - Only `t2.micro` / `t3.micro` can be launched (`config.ALLOWED_INSTANCE_TYPES`)
 - TTL is capped at `config.MAX_TTL_MINUTES` (default 240)
 - The reaper can only terminate instances tagged
-  `ManagedBy=ephemeral-vm-provisioner` — it will never touch anything
+  `ManagedBy=ephemeral-vm-provisioner` - it will never touch anything
   else in the account (enforced by both the code and the IAM policy)
 
 ## Testing
