@@ -86,7 +86,7 @@ aws iam create-open-id-connect-provider \
 
 ### 2. Create the IAM role
 
-The repo/org placeholder is already filled in. Replace `<ACCOUNT_ID>` in
+The repo/org placeholder is already filled in. Replace the account id in
 `infra/iam-trust-policy.json` with your AWS account ID
 (`aws sts get-caller-identity --query Account --output text`), then:
 
